@@ -1,13 +1,13 @@
 {
   "domain": "fixture_sync",
   "name": "Fixture Sync",
-  "version": "0.1.0",
-  "documentation": "https://github.com/ghultink/ha-fixture-sync",
-  "issue_tracker": "https://github.com/ghultink/ha-fixture-sync/issues",
   "codeowners": ["@ghultink"],
-  "iot_class": "cloud_polling",
-  "integration_type": "service",
   "config_flow": true,
   "dependencies": ["calendar"],
-  "requirements": []
+  "documentation": "https://github.com/ghultink/ha-fixture-sync",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/ghultink/ha-fixture-sync/issues",
+  "requirements": [],
+  "version": "0.1.0"
 }
