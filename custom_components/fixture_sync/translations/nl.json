@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Fixture Sync",
+        "description": "Synchroniseer voetbalwedstrijden van fixturedownload.com naar een Home Assistant kalender.",
+        "data": {
+          "competition": "Competitie-slug (bv. la-liga-2025)",
+          "team": "Naam van het team (substring-match)",
+          "calendar_entity": "Doel-kalender",
+          "event_hours": "Duur per wedstrijd (uren)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Deze combinatie van team en competitie is al ingesteld."
+    }
+  },
+  "services": {
+    "sync_now": {
+      "name": "Nu synchroniseren",
+      "description": "Haal wedstrijden op en voeg ontbrekende kalenderevenementen toe."
+    }
+  }
+}

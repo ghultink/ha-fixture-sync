@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Fixture Sync",
+        "description": "Sync football fixtures from fixturedownload.com into a Home Assistant calendar.",
+        "data": {
+          "competition": "Competition slug (e.g. la-liga-2025)",
+          "team": "Team name (substring match against HomeTeam/AwayTeam)",
+          "calendar_entity": "Target calendar entity",
+          "event_hours": "Event duration (hours)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This team/competition combination is already configured."
+    }
+  },
+  "services": {
+    "sync_now": {
+      "name": "Sync now",
+      "description": "Fetch fixtures and create missing calendar events."
+    }
+  }
+}
