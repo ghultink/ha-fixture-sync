@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tech docs — Smart Channels</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="../"><span class="logo-dot"></span>BB Daily <span style="opacity:.6">/ smart channels demo</span></a>
+  <nav>
+    <a href="../">Overview</a>
+    <a href="../querystring/">URL signal</a>
+    <a href="../localstorage/">Visitor preference</a>
+    <a href="../ai/">AI-suggested</a>
+    <a href="../build-it/">Build it</a>
+    <a href="./" class="active">Tech docs</a>
+  </nav>
+  <a class="bb-mark" href="https://www.bluebillywig.com" target="_blank" rel="noopener"><span>powered by</span><img src="../assets/bb-logo.svg" alt="Blue Billywig"></a>
+</header>
+
+<main style="grid-template-columns: 1fr;">
+  <div class="intro">
+    <h1>Tech docs — Smart Channels, end to end</h1>
+
+    <p>Where the smart-related-items demo wired dynamic filters into the
+      <em>player's</em> post-roll panel, this one wires the same filters into
+      the <em>Channel widget's</em> Cliplist blocks. The cliplist contract is
+      identical; the runtime that resolves it is similar but not the same.</p>
+
+    <h2>1. Embedding a Channel</h2>
+    <p>One <code>&lt;script&gt;</code>:</p>
+    <div class="code">&lt;script src="https://{publication}.bbvms.com/ch/{channelId}.js" async&gt;&lt;/script&gt;</div>
+    <p>The widget appends its root next to the script tag, attaches a Shadow
+      DOM, and bootstraps from
+      <code>{publication}.bbvms.com/ch/{channelId}.json</code>.</p>
+
+    <h2>2. The Channel JSON</h2>
+    <p>The bootstrap JSON looks like this (abridged):</p>
+    <div class="code">{
+  "appConfig": {
+    "id": "1364",
+    "label": "smart_channel_querystring_demo",
+    "blocks": [
+      {
+        "type": "FeaturedHeader",
+        "id": "feat-cc-1",
+        "slides": [
+          { "id": "...", "header": "Quick microwave pasta",
+            "contentType": "mediaclip", "contentId": "7281312" },
+          /* ... */
+        ],
+        "config": { "headerVariant": "fullWidth", "imageFitMode": "fit" }
+      },
+      {
+        "type": "Cliplist",
+        "id": "block-qs",
+        "config": {
+          "header": "Picked for this article (URL-driven)",
+          "contentId": "1778581766079178",   // ← the smart cliplist
+          "thumbnailSize": "medium",
+          "playlistLayout": "Carousel"
+        }
+      }
+    ],
+    "colorTheme": "light",
+    "primaryFontColor": "#002837",
+    /* … and styling fields */
+  },
+  "publicationData": { /* … */ },
+  "embedData":        { "appId": "1364", "appIndicator": "ch", "baseurl": "..." }
+}</div>
+    <p>For each <code>Cliplist</code> block, the Channel widget fetches the
+      cliplist by id and renders its items as a carousel / grid.</p>
+
+    <h2>3. How the Channel fetches a smart cliplist</h2>
+    <p>For a non-smart cliplist (just a hand-picked list of clips), one call
+      is enough:</p>
+    <div class="code">GET /papi/search?cliplistid={cliplistId}&amp;allowCache=true</div>
+    <p>If that response has <code>allowDatasource: true</code>, the widget
+      treats it as a <em>template</em> and re-fires the search with the filter
+      values resolved against the visitor's URL and storage:</p>
+    <div class="code">GET /papi/search?filterset=&lt;json-array&gt;&amp;sort=…&amp;limit=…</div>
+    <p>So the per-visitor work is exactly one extra SAPI search call — every
+      other call is shared cache.</p>
+
+    <h2 id="querystring">4. Supported data-source types <em>in Channels</em></h2>
+    <p>This is the most important difference from the player. The Channel
+      widget's <code>datasource-resolver</code> currently handles three of the
+      OVP's source types; the rest fall back to the filter's static value:</p>
+    <table>
+      <thead><tr><th>Source type</th><th>In Channels?</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td><code>QueryString</code></td><td>✓ supported</td><td>Reads
+          <code>window.location.search</code>. Base64-prefixed values (<code>b64:…</code>)
+          are auto-decoded.</td></tr>
+        <tr id="localstorage"><td><code>LocalStorage</code></td><td>✓ supported</td><td>Reads
+          <code>window.localStorage</code>. JSON-quoted values are auto-unwrapped
+          (same convention as the Blue Billywig player's storage engine).</td></tr>
+        <tr><td><code>PlainText</code></td><td>✓ supported</td><td>Pass-through
+          to the static value.</td></tr>
+        <tr><td><code>JavaScript</code></td><td>✗ not supported in Channels</td><td>Returns the
+          filter's <code>defaultValue</code>. (Use a query-string or localStorage
+          instead, primed by the host page.)</td></tr>
+        <tr><td><code>DatafeedValue</code> / <code>WidgetProperty</code></td><td>✗ not supported in Channels</td><td>Same fallback.</td></tr>
+      </tbody>
+    </table>
+    <p>If you need a JavaScript-style "read this from the page DOM" source,
+      keep that logic in the host page and have it write to
+      <code>localStorage</code> or amend the URL <em>before</em> the Channel
+      embed mounts.</p>
+
+    <h2 id="ai">5. AI-suggested topics on a Channel</h2>
+    <p>Channels don't expose a <code>setRelatedItems</code>-style escape
+      hatch. So the AI-suggested flow goes one step earlier: the AI is used
+      as a topic classifier, and the host page writes that topic to the URL
+      (or storage) before the Channel mounts. Loop:</p>
+    <ol style="font-size:13px">
+      <li>Page asks the AI: <em>"Given this article theme, pick 1–2 of these
+        buckets."</em> Same prompt shape as the
+        <a href="https://www.bluebillywig.tv/smart-related-items/tech/#ai">player demo</a>.</li>
+      <li>Page parses the JSON answer, validates each topic against the bucket
+        whitelist.</li>
+      <li>Page navigates to the same URL with
+        <code>?topic=&lt;top-pick&gt;</code> (or sets
+        <code>localStorage.bb_demo_topic</code>) and lets the page reload.</li>
+      <li>The Channel mounts, sees the URL / storage, and re-fills its
+        Cliplist block accordingly.</li>
+    </ol>
+    <p>Why a reload? Because the Channel resolves filters once, at mount
+      time. Two ways around it if you don't want a reload:</p>
+    <ul style="font-size:13px">
+      <li>Don't mount the Channel until the AI has answered (defer the
+        <code>&lt;script&gt;</code> insertion).</li>
+      <li>Mount inside a hidden div, then move it into view after answer.
+        Slightly trickier; the reload pattern is the simplest one to get right.</li>
+    </ul>
+
+    <h2>6. Assets created on the <code>demo</code> publication for this walk-through</h2>
+    <table>
+      <thead><tr><th>Type</th><th>ID</th><th>Label / purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Channel</td><td><code>1364</code></td><td><code>smart_channel_querystring_demo</code> · uses the QueryString cliplist; used by ① and ③</td></tr>
+        <tr><td>Channel</td><td><code>1365</code></td><td><code>smart_channel_localstorage_demo</code> · uses the LocalStorage cliplist; used by ②</td></tr>
+        <tr><td>Cliplist</td><td><code>1778581766079178</code></td><td>QueryString-driven smart playlist (CC-pool gated)</td></tr>
+        <tr><td>Cliplist</td><td><code>1778581784328417</code></td><td>LocalStorage-driven smart playlist (CC-pool gated)</td></tr>
+        <tr><td>MediaClips</td><td><code>7281312–7281327</code></td><td>12 CC0 synthetic clips, 75 s each, animated topic-coloured background, all tagged
+          <code>creative-commons</code> + one of <code>recipes / real estate / parenting / gaming</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>7. Companion demo</h2>
+    <p>The same cliplists + clips power the related-items walk-through at
+      <a href="https://www.bluebillywig.tv/smart-related-items/">/smart-related-items/</a>.
+      Pick the surface that fits your integration: <em>panel after each
+      video</em> (related items) or <em>whole sub-page of videos</em>
+      (Channels).</p>
+  </div>
+</main>
+
+<footer>
+  Blue Billywig · technical reference for the smart Channels walk-through ·
+  <a href="../">back to demo</a>
+</footer>
+</body>
+</html>

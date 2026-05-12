@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Smart related items — Blue Billywig demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="./"><span class="logo-dot"></span>BB Daily <span style="opacity:.6">/ smart related items demo</span></a>
+  <nav>
+    <a href="./" class="active">Overview</a>
+    <a href="./querystring/">URL signal</a>
+    <a href="./localstorage/">Visitor preference</a>
+    <a href="./javascript/">Page tag</a>
+    <a href="./external/">Direct list</a>
+    <a href="./ai/">AI-suggested</a>
+    <a href="./suggests/">Suggests</a>
+    <a href="./build-it/">Build it</a>
+    <a href="./tech/">Tech docs</a>
+  </nav>
+  <a class="bb-mark" href="https://www.bluebillywig.com" target="_blank" rel="noopener"><span>powered by</span><img src="assets/bb-logo.svg" alt="Blue Billywig"></a>
+</header>
+
+<main style="grid-template-columns: 1fr;">
+  <div class="intro">
+    <h1>Show the right videos at the end of every clip — automatically</h1>
+
+    <p style="font-size:17px; max-width:780px; color:var(--bb-navy)">
+      After a video ends, our player shows a panel of follow-up videos. The smart
+      thing? <strong>What appears in that panel can adapt to the article around it</strong> —
+      without anyone reconfiguring the player per page.
+    </p>
+
+    <figure style="margin:24px 0 28px; padding:0; border-radius:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,40,55,0.08);">
+      <img src="assets/hero-smart-related.svg" alt="One main video on the left, three connector lines fanning out to three different end-screen panels on the right — a recipes panel in orange, a sports panel in cyan, and a parenting panel in navy — showing how the same embed adapts to different articles."
+           style="display:block; width:100%; height:auto;">
+    </figure>
+
+    <div style="background: linear-gradient(135deg, #fff6ed, #fff 80%); border: 1px solid #ffd7b3; border-radius: 10px; padding: 22px 26px; margin: 22px 0;">
+      <h2 style="margin-top:0; color:var(--bb-orange); font-size:14px; text-transform:uppercase; letter-spacing:0.6px">Why this matters</h2>
+      <p style="margin:0 0 10px"><strong>Problem.</strong>
+        Most players just show "more from the same channel" at the end. If you embed
+        the same video on a recipe article and on a parenting article, both visitors
+        see the same generic list.</p>
+      <p style="margin:0 0 10px"><strong>What the website already knows.</strong>
+        The site you're reading already knows what each article is about — that's why
+        the same article appears under <em>"Recipes"</em>, <em>"Real estate"</em>,
+        <em>"Parenting"</em> or <em>"Gaming"</em> in the menu. That knowledge is sitting
+        right there in the URL, in the article tags, or in the visitor's profile.</p>
+      <p style="margin:0"><strong>The smart bit.</strong>
+        We let the website hand that knowledge to the player — and the panel updates
+        itself. A recipe article ends in more recipes. A gaming article ends in more
+        gaming. The visitor stays longer, watches more.</p>
+    </div>
+
+    <h2 style="margin-top:32px">Six ways the page can guide what plays</h2>
+    <p>Five techniques drive the <em>end-screen strip</em> after a fixed
+      anchor clip; the sixth lets the player pick the <em>main clip itself</em>.
+      Same publication, same video pool — different points in the funnel.</p>
+
+    <div class="scenario-grid">
+      <a class="scenario-card" href="./querystring/">
+        <span class="num">1</span>
+        <h3>The URL</h3>
+        <p>The article's web address says what topic it's about. The player reads
+          that and matches.</p>
+        <p style="margin-top:10px;color:var(--bb-orange);font-weight:600;font-size:12px">SIMPLEST · No code changes</p>
+      </a>
+      <a class="scenario-card" href="./localstorage/">
+        <span class="num">2</span>
+        <h3>The visitor's preference</h3>
+        <p>The visitor picks what they like; the choice is remembered in their browser
+          and follows them around the site.</p>
+        <p style="margin-top:10px;color:var(--bb-orange);font-weight:600;font-size:12px">PERSONAL · Sticks per visitor</p>
+      </a>
+      <a class="scenario-card" href="./javascript/">
+        <span class="num">3</span>
+        <h3>The article's hidden tag</h3>
+        <p>Articles already carry hidden labels for SEO ("this is a parenting
+          article"). The player reads the same labels.</p>
+        <p style="margin-top:10px;color:var(--bb-orange);font-weight:600;font-size:12px">INVISIBLE · Editors keep working their way</p>
+      </a>
+      <a class="scenario-card" href="./external/">
+        <span class="num">4</span>
+        <h3>A ready-made list</h3>
+        <p>If the site already has its own recommendation engine, it hands the
+          player a finished list of clips.</p>
+        <p style="margin-top:10px;color:var(--bb-orange);font-weight:600;font-size:12px">FULL CONTROL · Bypass the engine</p>
+      </a>
+      <a class="scenario-card" href="./ai/">
+        <span class="num">5</span>
+        <h3>The visitor's own AI</h3>
+        <p>The visitor's browser-based AI (Gemini Nano, ChatGPT, …) picks the
+          best follow-ups from the catalogue.</p>
+        <p style="margin-top:10px;color:var(--bb-orange);font-weight:600;font-size:12px">ON-DEVICE · No keys to manage</p>
+      </a>
+      <a class="scenario-card" href="./suggests/">
+        <span class="num">6</span>
+        <h3>The article's own SEO <span style="display:block;font-size:11px;color:var(--bb-orange);font-weight:600;margin-top:2px">PICKS THE MAIN CLIP</span></h3>
+        <p>Unlike the other five — which all leave the main clip fixed and
+          only swap the strip after — Suggests reads the article's existing
+          SEO metadata and lets the Blue Billywig search engine pick
+          <em>which clip plays</em>. The end-screen strip is filled from the
+          rest of that same search.</p>
+        <p style="margin-top:10px;color:var(--bb-orange);font-weight:600;font-size:12px">BUILT-IN · No extra signal required</p>
+      </a>
+    </div>
+
+    <h2 style="margin-top:32px">How to use this demo</h2>
+    <ol style="font-size:15px;max-width:760px">
+      <li>Pick one of the six scenarios above.</li>
+      <li>In the side panel, choose a topic (Recipes, Real estate, Parenting, Gaming).</li>
+      <li>Hit <em>Reload</em>, then click <em>Skip to end</em> on the player.</li>
+      <li>Watch the bottom strip — those follow-ups were chosen by the smart
+        playlist (or, in scenario ⑤, by the AI + a SAPI search) using whichever
+        signal that page demonstrates.</li>
+    </ol>
+
+    <div style="background: linear-gradient(135deg, #fff6ed, #fff 80%); border: 1px solid #ffd7b3; border-radius: 10px; padding: 18px 22px; margin: 22px 0;">
+      <strong style="color:var(--bb-orange);">Companion demo →</strong>
+      The same dynamic-filter machinery wires into BB Channels too — whole
+      sub-pages of videos that refill per-visitor. See
+      <a href="https://www.bluebillywig.tv/smart-channels/"><strong>smart Channels</strong></a>.
+    </div>
+
+    <h2 style="margin-top:32px">Build this on your own publication</h2>
+    <p>The <a href="./build-it/"><strong>Build it</strong></a> guide walks through
+      the exact Blue Billywig OVP screens you need — creating a smart playlist with dynamic
+      filters, wiring it into a playout, and embedding on an article page.
+      Step-by-step, with screenshots from the demo publication.</p>
+
+    <div class="legend" style="margin-top:30px">
+      <strong>For developers:</strong>
+      the <a href="./tech/">Tech docs</a> page has everything under the hood — the
+      cliplist filter JSON, the data-source contracts, the operator vocabulary, the
+      SAPI flow, and the exact assets created on the demo publication for this
+      walk-through.
+    </div>
+  </div>
+</main>
+
+<footer>
+  Blue Billywig · smart related items walk-through ·
+  <a href="./tech/">technical reference</a> ·
+  companion demo: <a href="https://www.bluebillywig.tv/smart-channels/">smart Channels</a> ·
+  source clips on <a href="https://demo.bbvms.com">demo.bbvms.com</a>
+</footer>
+</body>
+</html>

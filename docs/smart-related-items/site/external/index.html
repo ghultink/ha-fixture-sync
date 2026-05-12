@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>④ Direct list — Blue Billywig demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="../"><span class="logo-dot"></span>BB Daily <span style="opacity:.6">/ smart related items demo</span></a>
+  <nav>
+    <a href="../">Overview</a>
+    <a href="../querystring/">URL signal</a>
+    <a href="../localstorage/">Visitor preference</a>
+    <a href="../javascript/">Page tag</a>
+    <a href="./" class="active">Direct list</a>
+    <a href="../ai/">AI-suggested</a>
+    <a href="../suggests/">Suggests</a>
+    <a href="../build-it/">Build it</a>
+    <a href="../tech/">Tech docs</a>
+  </nav>
+  <a class="bb-mark" href="https://www.bluebillywig.com" target="_blank" rel="noopener"><span>powered by</span><img src="../assets/bb-logo.svg" alt="Blue Billywig"></a>
+</header>
+
+<main>
+  <article>
+    <span class="tag">site decides</span>
+    <h1>The site picks the videos itself — the player just renders them</h1>
+    <div class="byline">Blue Billywig demo · live walk-through</div>
+
+    <div style="background:#fff6ed; border:1px solid #ffd7b3; border-radius:8px; padding:16px 20px; margin:0 0 18px;">
+      <strong style="color:var(--bb-orange);">In plain English:</strong>
+      Some websites already run their own clever recommendation system. In that case
+      we let the site take over completely: it hands the player a ready-made list of
+      videos, and the player simply shows them at the end. Toggle the checkboxes on
+      the right and watch the post-roll panel match your picks exactly.
+    </div>
+
+    <div class="player-wrap" id="player-host"></div>
+
+    <p style="margin-top:18px">
+      <strong>Try it.</strong> Tick or untick clips on the right, hit <em>Push to
+      player</em>, then <em>Skip to end →</em>. Use <em>Clear override</em> to hand
+      control back to the smart playlist.
+    </p>
+
+    <details>
+      <summary>Show technical detail (the list being pushed)</summary>
+      <div class="code" style="margin-bottom:8px">window.bluebillywig = window.bluebillywig || {};
+window.bluebillywig.onPlayerAdded = (player) =&gt; {
+  player.setRelatedItems([
+    { id: '7281321', type: 'MediaClip', title: 'Bedtime Routine Hacks', deeplink: '…' },
+    // …
+  ]);
+};</div>
+      <div class="filter-preview" id="filter-preview"></div>
+      <p style="margin-top:8px;font-size:12px;color:var(--muted)">
+        Full reference: <a href="../tech/">Tech docs</a>.
+      </p>
+    </details>
+  </article>
+
+  <aside>
+    <h2>Curate the list</h2>
+
+    <div class="control-block">
+      <label>Tick the clips you want to recommend</label>
+      <div id="pick-list"></div>
+    </div>
+
+    <button id="apply-btn">Push to player</button>
+    <button class="secondary" id="seek-btn">Skip to end →</button>
+    <button class="secondary" id="clear-btn">Clear override</button>
+
+    <details style="margin-top:18px">
+      <summary>Pick a different anchor video</summary>
+      <div class="control-block" style="margin-top:8px">
+        <select id="clip-select">
+          <option value="7281312" selected>🍳 Quick Microwave Pasta (1:15)</option>
+          <option value="7281315">🍳 5-Minute Veggie Frittata (1:15)</option>
+          <option value="7281317">🍳 One-Pot Lentil Curry (1:15)</option>
+          <option value="7281318">🏠 Open House Tips (1:15)</option>
+          <option value="7281319">🏠 First-Time Buyer Guide (1:15)</option>
+          <option value="7281320">🏠 Mortgage Basics (1:15)</option>
+          <option value="7281321">👶 Bedtime Routine Hacks (1:15)</option>
+          <option value="7281322">👶 Toddler Tantrums 101 (1:15)</option>
+          <option value="7281323">👶 Healthy Snacks for Kids (1:15)</option>
+          <option value="7281324">🎮 Best RPGs of 2025 (1:15)</option>
+          <option value="7281325">🎮 Building a Gaming Setup (1:15)</option>
+          <option value="7281327">🎮 Indie Games You Missed (1:15)</option>
+        </select>
+      </div>
+    </details>
+  </aside>
+</main>
+
+<footer>
+  Blue Billywig · ④ Direct list · <a href="../tech/#external">technical reference</a>
+</footer>
+
+<script>
+  const PLAYOUT = 'smart_related_items_demo';
+  const BASE = 'https://demo.bbvms.com';
+
+  const CANDIDATES = [
+    { id: '7281312', title: '🍳 Quick Microwave Pasta' },
+    { id: '7281315', title: '🍳 5-Minute Veggie Frittata' },
+    { id: '7281317', title: '🍳 One-Pot Lentil Curry' },
+    { id: '7281318', title: '🏠 Open House Tips' },
+    { id: '7281319', title: '🏠 First-Time Buyer Guide' },
+    { id: '7281320', title: '🏠 Mortgage Basics' },
+    { id: '7281321', title: '👶 Bedtime Routine Hacks' },
+    { id: '7281322', title: '👶 Toddler Tantrums 101' },
+    { id: '7281323', title: '👶 Healthy Snacks for Kids' },
+    { id: '7281324', title: '🎮 Best RPGs of 2025' },
+    { id: '7281325', title: '🎮 Building a Gaming Setup' },
+    { id: '7281327', title: '🎮 Indie Games You Missed' },
+  ];
+  const clipSel  = document.getElementById('clip-select');
+  const pickList = document.getElementById('pick-list');
+  const filterPreview = document.getElementById('filter-preview');
+  const params = new URLSearchParams(location.search);
+
+  // Whitelist param values against the actual dropdown options (defence-in-depth
+  // against URL-parameter injection — even though we never insert these values
+  // into HTML via innerHTML, select.value already filters non-matching values
+  // in modern browsers).
+  function pickOption(sel, val) {
+    if (!val || !sel) return;
+    if ([...sel.options].some(o => o.value === val)) sel.value = val;
+  }
+  pickOption(clipSel, params.get('clip'));
+
+  let picks = new Set(['7281312', '7281318', '7281321', '7281324']);
+
+  function renderPicks() {
+    pickList.innerHTML = '';
+    CANDIDATES.forEach(c => {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex;gap:8px;font-size:13px;margin:5px 0;align-items:center';
+      lbl.innerHTML = `<input type="checkbox" ${picks.has(c.id) ? 'checked' : ''} value="${c.id}"> <span>${c.title}</span>`;
+      lbl.querySelector('input').addEventListener('change', e => {
+        if (e.target.checked) picks.add(c.id); else picks.delete(c.id);
+        renderFilter();
+      });
+      pickList.appendChild(lbl);
+    });
+  }
+  function buildItems() {
+    return [...picks].map(id => {
+      const c = CANDIDATES.find(x => x.id === id);
+      return {
+        id, type: 'MediaClip', title: c.title,
+        deeplink: `https://demo.bbvms.com/view/${id}`
+      };
+    });
+  }
+  function renderFilter() {
+    filterPreview.textContent = JSON.stringify(buildItems(), null, 2);
+  }
+  renderPicks();
+  renderFilter();
+
+  // Register a hook on the global namespace BEFORE the player script loads, so
+  // the player picks up our list as soon as it's ready.
+  window.bluebillywig = window.bluebillywig || {};
+  window.bluebillywig.onPlayerAdded = (player) => player.setRelatedItems(buildItems());
+
+  const host = document.getElementById('player-host');
+  const s = document.createElement('script');
+  s.src = `${BASE}/p/${PLAYOUT}/c/${clipSel.value}.js`;
+  s.async = true;
+  host.appendChild(s);
+
+  function pushItems(items) {
+    const p = window.bluebillywig?.players?.[0];
+    if (!p) { alert('Player not ready yet'); return; }
+    p.setRelatedItems(items);
+  }
+
+  document.getElementById('apply-btn').addEventListener('click', () => pushItems(buildItems()));
+  document.getElementById('clear-btn').addEventListener('click', () => pushItems(null));
+  document.getElementById('seek-btn').addEventListener('click', () => {
+    const p = window.bluebillywig?.players?.[0];
+    if (!p) return alert('Player not ready yet');
+    if (p.getPhase() === 'INIT') p.play();
+    setTimeout(() => p.seek(p.getDuration() - 0.5), 250);
+  });
+</script>
+</body>
+</html>

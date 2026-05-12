@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>② Visitor preference — Blue Billywig demo</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="../"><span class="logo-dot"></span>BB Daily <span style="opacity:.6">/ smart related items demo</span></a>
+  <nav>
+    <a href="../">Overview</a>
+    <a href="../querystring/">URL signal</a>
+    <a href="./" class="active">Visitor preference</a>
+    <a href="../javascript/">Page tag</a>
+    <a href="../external/">Direct list</a>
+    <a href="../ai/">AI-suggested</a>
+    <a href="../suggests/">Suggests</a>
+    <a href="../build-it/">Build it</a>
+    <a href="../tech/">Tech docs</a>
+  </nav>
+  <a class="bb-mark" href="https://www.bluebillywig.com" target="_blank" rel="noopener"><span>powered by</span><img src="../assets/bb-logo.svg" alt="Blue Billywig"></a>
+</header>
+
+<main>
+  <article>
+    <span class="tag" id="topic-tag">(none set)</span>
+    <h1>Pick what you're into — your follow-ups will adapt everywhere</h1>
+    <div class="byline">Blue Billywig demo · live walk-through</div>
+
+    <div style="background:#fff6ed; border:1px solid #ffd7b3; border-radius:8px; padding:16px 20px; margin:0 0 18px;">
+      <strong style="color:var(--bb-orange);">In plain English:</strong>
+      The visitor picks once (here, in the side panel). The browser remembers that
+      choice — like a cookie. From then on, every video on the site, on any page,
+      ends with follow-ups in that flavour. The preference belongs to the visitor,
+      not the page.
+    </div>
+
+    <div class="player-wrap" id="player-host"></div>
+
+    <p style="margin-top:18px">
+      <strong>Try it.</strong> Save a preference, then either watch to the end or
+      hit <em>Skip to end →</em>. Come back tomorrow and the preference will still be
+      there.
+    </p>
+
+    <details>
+      <summary>Show technical detail (filter JSON)</summary>
+      <div class="filter-preview" id="filter-preview"></div>
+      <p style="margin-top:8px;font-size:12px;color:var(--muted)">
+        Full reference: <a href="../tech/">Tech docs</a>.
+      </p>
+    </details>
+  </article>
+
+  <aside>
+    <h2>Visitor preference</h2>
+
+    <div class="control-block">
+      <label for="topic-select">I'm into…</label>
+      <select id="topic-select">
+        <option value="recipes">🍳 Recipes</option>
+        <option value="real estate">🏠 Real estate</option>
+        <option value="parenting">👶 Parenting</option>
+        <option value="gaming">🎮 Gaming</option>
+        <option value="">(none)</option>
+      </select>
+    </div>
+
+    <button id="save-btn">Save preference & reload</button>
+    <button class="secondary" id="seek-btn">Skip to end →</button>
+
+    <div class="control-block" style="margin-top:18px">
+      <label>Saved in browser</label>
+      <div class="url-preview" id="ls-preview"></div>
+    </div>
+
+    <details>
+      <summary>Pick a different anchor video</summary>
+      <div class="control-block" style="margin-top:8px">
+        <select id="clip-select">
+          <option value="7281312" selected>🍳 Quick Microwave Pasta (1:15)</option>
+          <option value="7281315">🍳 5-Minute Veggie Frittata (1:15)</option>
+          <option value="7281317">🍳 One-Pot Lentil Curry (1:15)</option>
+          <option value="7281318">🏠 Open House Tips (1:15)</option>
+          <option value="7281319">🏠 First-Time Buyer Guide (1:15)</option>
+          <option value="7281320">🏠 Mortgage Basics (1:15)</option>
+          <option value="7281321">👶 Bedtime Routine Hacks (1:15)</option>
+          <option value="7281322">👶 Toddler Tantrums 101 (1:15)</option>
+          <option value="7281323">👶 Healthy Snacks for Kids (1:15)</option>
+          <option value="7281324">🎮 Best RPGs of 2025 (1:15)</option>
+          <option value="7281325">🎮 Building a Gaming Setup (1:15)</option>
+          <option value="7281327">🎮 Indie Games You Missed (1:15)</option>
+        </select>
+      </div>
+    </details>
+  </aside>
+</main>
+
+<footer>
+  Blue Billywig · ② Visitor preference · <a href="../tech/#localstorage">technical reference</a>
+</footer>
+
+<script>
+  const PLAYOUT = 'smart_related_demo_localstorage';
+  const BASE = 'https://demo.bbvms.com';
+  const CLIPLIST_ID = '1778581784328417';
+  const KEY = 'bb_demo_topic';
+  const params = new URLSearchParams(location.search);
+
+  // Whitelist param values against the actual dropdown options (defence-in-depth
+  // against URL-parameter injection — even though we never insert these values
+  // into HTML via innerHTML, select.value already filters non-matching values
+  // in modern browsers).
+  function pickOption(sel, val) {
+    if (!val || !sel) return;
+    if ([...sel.options].some(o => o.value === val)) sel.value = val;
+  }
+
+  const topicTag = document.getElementById('topic-tag');
+  const topicSel = document.getElementById('topic-select');
+  const clipSel  = document.getElementById('clip-select');
+  const lsPreview = document.getElementById('ls-preview');
+  const filterPreview = document.getElementById('filter-preview');
+  const TOPIC_LABELS = { recipes: 'Recipes', 'real estate': 'Real estate', parenting: 'Parenting', gaming: 'Gaming' };
+
+  pickOption(clipSel, params.get('clip'));
+
+  // The player's LocalStorage engine JSON-stringifies values into window.localStorage
+  // under the same key — so any value we read back can be wrapped in 1+ layers of
+  // JSON quoting from previous page loads. Unwrap before use.
+  function unwrap(raw) {
+    let v = raw;
+    while (typeof v === 'string' && v.length >= 2 && v[0] === '"' && v[v.length - 1] === '"') {
+      try { v = JSON.parse(v); } catch (e) { break; }
+    }
+    return v;
+  }
+  const stored = unwrap(localStorage.getItem(KEY));
+  if (stored && TOPIC_LABELS[stored]) topicSel.value = stored;
+
+  function refreshDisplays() {
+    const cur = unwrap(localStorage.getItem(KEY));
+    lsPreview.textContent = !cur ? '(not set)' : JSON.stringify(cur);
+    topicTag.textContent = cur ? (TOPIC_LABELS[cur] ?? cur) : '(falls back to default)';
+    filterPreview.textContent = JSON.stringify({
+      cliplistId: CLIPLIST_ID,
+      filterset: [
+        { filters: [{
+            id: 'lsTopic', type: 'search', field: 'cat',
+            operator: 'containsAnyOf',
+            value: cur || '(falls back to cliplist defaultValue)',
+            datasource: { sourceType: 'LocalStorage', sourceValue: KEY, defaultValue: 'recipes' }
+        }] },
+        { filters: [{
+            id: 'ccgate', type: 'search', field: 'cat',
+            operator: 'containsAnyOf', value: 'creative-commons'
+        }] },
+      ],
+      sort: 'published_date desc', limit: 15
+    }, null, 2);
+  }
+  refreshDisplays();
+
+  // The player's LocalStorage engine writes to window.localStorage but
+  // JSON-stringifies the value. To keep the on-disk format consistent across
+  // page reloads and player API writes, prefer the player API for writes;
+  // fall back to a player-compatible (JSON-stringified) raw write when the
+  // player isn't ready yet. Reads always unwrap.
+  window.bluebillywig = window.bluebillywig || {};
+  window.bluebillywig.onPlayerAdded = (player) => {
+    if (stored) player.setLocalStorageItem(KEY, stored);
+  };
+
+  const host = document.getElementById('player-host');
+  const s = document.createElement('script');
+  s.src = `${BASE}/p/${PLAYOUT}/c/${clipSel.value}.js`;
+  s.async = true;
+  host.appendChild(s);
+
+  document.getElementById('save-btn').addEventListener('click', () => {
+    const p = window.bluebillywig?.players?.[0];
+    // Safari private mode and quota-exceeded throw synchronously from setItem.
+    // Surface that so the visitor knows the reload won't carry their pick.
+    try {
+      if (topicSel.value) {
+        if (p) p.setLocalStorageItem(KEY, topicSel.value);
+        else   localStorage.setItem(KEY, JSON.stringify(topicSel.value));
+      } else {
+        if (p) p.setLocalStorageItem(KEY, '');
+        else   localStorage.removeItem(KEY);
+      }
+    } catch (e) {
+      console.warn('localStorage write failed:', e);
+      alert("Couldn't save your preference (private browsing or storage full). The page will still reload, but the panel will fall back to the cliplist default.");
+    }
+    const url = new URL(location.href);
+    url.searchParams.set('clip', clipSel.value);
+    location.href = url.toString();
+  });
+
+  document.getElementById('seek-btn').addEventListener('click', () => {
+    const p = window.bluebillywig?.players?.[0];
+    if (!p) return alert('Player not ready yet');
+    if (p.getPhase() === 'INIT') p.play();
+    setTimeout(() => p.seek(p.getDuration() - 0.5), 250);
+  });
+</script>
+</body>
+</html>

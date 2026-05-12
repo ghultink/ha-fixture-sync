@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tech docs — Smart related items</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="../"><span class="logo-dot"></span>BB Daily <span style="opacity:.6">/ smart related items demo</span></a>
+  <nav>
+    <a href="../">Overview</a>
+    <a href="../querystring/">URL signal</a>
+    <a href="../localstorage/">Visitor preference</a>
+    <a href="../javascript/">Page tag</a>
+    <a href="../external/">Direct list</a>
+    <a href="../ai/">AI-suggested</a>
+    <a href="../suggests/">Suggests</a>
+    <a href="../build-it/">Build it</a>
+    <a href="./" class="active">Tech docs</a>
+  </nav>
+  <a class="bb-mark" href="https://www.bluebillywig.com" target="_blank" rel="noopener"><span>powered by</span><img src="../assets/bb-logo.svg" alt="Blue Billywig"></a>
+</header>
+
+<main style="grid-template-columns: 1fr;">
+  <div class="intro">
+    <h1>Tech docs — smart related items, end to end</h1>
+
+    <p>Everything you need to wire up smart related items on your own publication:
+      how the player picks what to show, what a smart playlist really is, the
+      data-source contracts you can hook into, and the embed-side options.</p>
+
+    <h2>1. How the player picks "related items"</h2>
+    <p>For every main-roll clip, the player walks a 5-step priority ladder when
+      assembling its post-roll panel:</p>
+    <table>
+      <thead><tr><th>Priority</th><th>Source</th><th>What triggers it</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>External list</td><td>Host called <code>player.setRelatedItems([…])</code> (or <code>setRelatedClips</code>) — see scenario ④.</td></tr>
+        <tr><td>2</td><td>Clip-level cliplist</td><td>The mediaclip has one of <code>relatedItemsListId</code>, <code>relateditems</code>, <code>gerelateerdeitems</code>, <code>relatedcliplist</code>, <code>exitscreen</code>, <code>exitscreenitems</code> set.</td></tr>
+        <tr><td>3</td><td>Playout-level cliplist</td><td>The playout has <code>exitscreenItemsListId</code> set — the path used by ①, ②, ③.</td></tr>
+        <tr><td>4</td><td>Tag search</td><td>No cliplist available — fallback: a weighted search on the clip's <code>cat</code> tags and title words.</td></tr>
+        <tr><td>5</td><td>Latest published</td><td>Last resort: most recently published items in the publication.</td></tr>
+      </tbody>
+    </table>
+
+    <p>Steps 2 and 3 hit the SAPI search endpoint:</p>
+    <div class="code">GET {publication}/json/search?cliplistid={id}&amp;filterbyusetype=all&amp;limit=15&amp;…</div>
+    <p>If the cliplist has <code>allowDatasource: true</code>, the player does
+      <em>not</em> trust the static filter values stored on the cliplist. Instead it
+      resolves each filter's <code>datasource</code> at runtime — reading the host
+      page's URL, the visitor's storage, etc. — and then re-issues the search with
+      the resolved values:</p>
+    <div class="code">GET {publication}/json/search?filterset=[resolved]&amp;sort=…&amp;limit=…</div>
+    <p style="font-size:13px;color:var(--muted)">
+      <strong>One step earlier — Suggests (<a href="#suggests">§ 5c</a>).</strong>
+      The 5-step ladder above is about <em>which items fill the end-screen
+      panel</em> — it assumes the main clip is already decided (by the embed
+      script's <code>contentId</code>). Suggests works in front of that:
+      with <code>useSuggest: true</code> on the cliplist or
+      <code>?useSuggest=true</code> on the embed URL, the Suggest helper runs
+      <em>before</em> <code>_objectInit</code> and replaces the bootstrap's
+      <code>clipData</code> with whatever the Blue Billywig search engine
+      ranks first. The remaining results pre-fill
+      <code>clipListData.items</code>, so the same 5-step ladder then renders
+      the end-screen panel from those already-fetched items.
+    </p>
+
+    <h2>2. Anatomy of a smart playlist (cliplist)</h2>
+    <p>A "smart" cliplist (created in the Blue Billywig OVP library) has:</p>
+    <ul>
+      <li><code>listtype: "dynamic"</code></li>
+      <li><code>filterType: "filters"</code> (the alternative is <code>"solr"</code> — raw query)</li>
+      <li><code>allowDatasource: "true"</code> — this is the toggle that enables the
+        <strong>plug icon</strong> next to each filter value in the Blue Billywig OVP and tells the
+        player to defer value resolution to runtime.</li>
+    </ul>
+
+    <p>The persisted JSON (this demo's QueryString cliplist, abridged):</p>
+    <div class="code">{
+  "listtype":   "dynamic",
+  "filterType": "filters",
+  "allowDatasource": "true",
+  "limit": 15,
+  "sort":  "published_date desc",
+  "filters": [
+    {
+      "filters": [
+        {
+          "id":       "qstopic",
+          "type":     "search",           // entity scope
+          "field":    "cat",              // OVP field name
+          "operator": "containsAnyOf",
+          "value":    "recipes",          // hard-coded fallback
+          "datasource": {
+            "sourceType":  "QueryString",
+            "sourceValue": "topic",
+            "defaultValue": "recipes"
+          }
+        }
+      ]
+    },
+    {
+      "filters": [
+        {
+          "id":       "ccgate",
+          "type":     "search",
+          "field":    "cat",
+          "operator": "containsAnyOf",
+          "value":    "creative-commons"   // static gate — demo content only
+        }
+      ]
+    }
+  ]
+}</div>
+
+    <p>Filter groups are <code>AND</code>-ed together; filters inside a group are
+      <code>OR</code>-ed. The second group above is a static
+      <em>content gate</em> that keeps this demo bounded to its CC0 video pool.</p>
+
+    <div class="legend">
+      <strong>Gotcha — the content preview on the Playlists page does not update
+      with dynamic filter settings.</strong> Dynamic filters are evaluated
+      <em>per clip</em>, so the playlist's own preview list (which has no clip
+      context) shows the static fallback, not the resolved result. To verify a
+      dynamic filter, preview or embed a clip on a page that has the
+      corresponding input present (URL parameter, localStorage value, meta tag, …)
+      and watch the post-roll strip.
+    </div>
+
+    <div class="legend">
+      <strong>Recommendation — pair dynamic filters with a default filter set.</strong>
+      Add a second filter group (or a static <code>value</code> alongside the
+      <code>datasource</code>) so the playlist still returns something usable
+      when the dynamic input is missing or broken.
+    </div>
+
+    <h2 id="operators">3. Operator vocabulary</h2>
+    <table>
+      <thead><tr><th>Operator</th><th>Applies to</th></tr></thead>
+      <tbody>
+        <tr><td><code>contains</code> / <code>doesNotContain</code></td><td>Substring on text/string fields</td></tr>
+        <tr><td><code>is</code> / <code>isNot</code></td><td>Exact equality</td></tr>
+        <tr><td><code>isEmpty</code> / <code>isNotEmpty</code></td><td>Presence checks</td></tr>
+        <tr><td><code>containsAnyOf</code> / <code>containsAllOf</code> / <code>doesNotContainAnyOf</code></td><td>Multi-value list fields (e.g. <code>cat</code>)</td></tr>
+        <tr><td><code>isBefore</code> / <code>isAfter</code> / <code>isInTheLast</code> / <code>isNotInTheLast</code></td><td>Date fields</td></tr>
+        <tr><td><code>isSmallerThan</code> / <code>isGreaterThan</code></td><td>Numeric fields</td></tr>
+      </tbody>
+    </table>
+
+    <h2>4. Data-source types</h2>
+    <p>Each filter can carry one <code>datasource</code> object. Contract:</p>
+    <div class="code">{
+  sourceType:   'QueryString' | 'LocalStorage' | 'JavaScript'
+              | 'PlainText'   | 'DatafeedValue' | 'WidgetProperty',
+  sourceValue:  string,     // key / script / "id:column"
+  defaultValue: string      // fallback when source resolves to empty
+}</div>
+
+    <h3 id="querystring">QueryString</h3>
+    <p>Reads from the request parameters the player sees. With JS-embed, the player
+      runs same-origin in the host page, so query parameters on the <em>host page's
+      URL</em> are visible. Values that look base64-encoded are auto-decoded.</p>
+    <div class="code">"datasource": {
+  "sourceType":   "QueryString",
+  "sourceValue":  "topic",
+  "defaultValue": "recipes"
+}</div>
+
+    <h3 id="localstorage">LocalStorage</h3>
+    <p>Reads from a per-player storage layer. <strong>Important:</strong> this is
+      <em>not</em> the browser's global <code>window.localStorage</code>. The host
+      page can write to the player's store via the public API:</p>
+    <div class="code">// Set BEFORE the player script loads
+window.bluebillywig = window.bluebillywig || {};
+window.bluebillywig.onPlayerAdded = (player) =&gt; {
+  player.setLocalStorageItem('bb_demo_topic', 'parenting');
+};</div>
+    <p>Filter side:</p>
+    <div class="code">"datasource": {
+  "sourceType":   "LocalStorage",
+  "sourceValue":  "bb_demo_topic",
+  "defaultValue": "recipes"
+}</div>
+    <p>Combine with <code>window.localStorage</code> on the host side if you want the
+      preference to outlive a single page: persist there, then mirror into the
+      player on every <code>onPlayerAdded</code> callback.</p>
+
+    <h3 id="javascript">JavaScript</h3>
+    <p>A small expression evaluated by the player at filter-resolution time. The
+      returned value becomes the filter input. Use this when the right value is
+      computed from page state — e.g. an HTML meta tag, a JS global, derived
+      session info.</p>
+    <div class="code">"datasource": {
+  "sourceType":   "JavaScript",
+  "sourceValue":  "(function(){var m=document.querySelector('meta[name=\"x-bb-topic\"]'); return m?m.content:'';})()",
+  "defaultValue": "recipes"
+}</div>
+    <p>Macros are pre-substituted inside <code>sourceValue</code> /
+      <code>defaultValue</code>: <code>{{querystring.X}}</code>,
+      <code>{{localstorage.Y}}</code>, <code>{{mediaclip.Z}}</code>,
+      <code>{{playout.Q}}</code>, <code>{{player.P}}</code>,
+      <code>{{asset.A}}</code>.</p>
+
+    <h3>PlainText (UI label: "Text with macro")</h3>
+    <p>A literal value with macro expansion (same macro set as JavaScript). The
+      macros expand <em>per clip</em> at the moment the filter is resolved — so
+      <code>{{mediaclip.length}}</code>, <code>{{mediaclip.cat}}</code>,
+      <code>{{querystring.cc}}</code>, etc. all become live values. Useful for
+      composite keys: <code>country_{{querystring.cc}}</code>.</p>
+
+    <h3>DatafeedValue</h3>
+    <p>Points at a Datafeed (CMS-managed CSV-like table managed in the Blue Billywig OVP). Format
+      <code>"&lt;feedId&gt;:&lt;columnKey&gt;"</code>. The helper supports condition
+      columns so different rows can fire based on the player's LocalStorage state.</p>
+
+    <h3>WidgetProperty</h3>
+    <p>Reads a property off a widget on the page (interactivity editor). Mostly used
+      inside interactive videos.</p>
+
+    <h2 id="external">5. Bypassing the cliplist (scenario ④)</h2>
+    <p>If your site already has its own recommendation engine, just hand the player a
+      finished list. Sanity-check on the first item: it needs at minimum
+      <code>id</code>, <code>type</code>, <code>title</code>, <code>deeplink</code>.
+      Pass anything thinner and the player enriches by ID via a SAPI lookup.</p>
+    <div class="code">window.bluebillywig = window.bluebillywig || {};
+window.bluebillywig.onPlayerAdded = (player) =&gt; {
+  player.setRelatedItems([
+    { id, type: 'MediaClip', title, deeplink /*, thumbnail, length, ... */ },
+    // ... up to 15
+  ]);
+};
+
+// to release control back to the cliplist later:
+// window.bluebillywig.players[0].setRelatedItems(null);</div>
+
+    <h2 id="ai">5b. Bonus: AI-suggested items (scenario ⑤)</h2>
+    <p>The <a href="../ai/">AI-suggested</a> scenario is a thin variant of
+      scenario ④: instead of the host site hand-picking the items, it asks an
+      <em>in-browser AI agent</em> to do it. The smart bit is that the entire
+      reasoning step can run on the visitor's device — no API keys, no server
+      round-trip, no third-party tracking.</p>
+
+    <h3>Which browser AIs are actually available?</h3>
+    <p>Two shapes of on-device <em>Prompt API</em> are currently in the wild,
+      both exposing a small instruction-tuned language model bundled with the
+      browser:</p>
+    <table>
+      <thead><tr><th>Surface</th><th>Browser</th><th>Status (Q2 2026)</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>window.LanguageModel</code></td><td>Chrome ≥ 138 (stable on most channels)</td><td>shipping behind an availability gate (~Gemini Nano)</td><td>Recommended path. ~ a few hundred MB one-time model download per profile.</td></tr>
+        <tr><td><code>window.ai.languageModel</code></td><td>Earlier Chrome / Edge previews</td><td>kept for backwards compatibility</td><td>Same prompt-style API, slightly older shape.</td></tr>
+        <tr><td><em>(neither present)</em></td><td>Firefox, Safari, older Chrome</td><td>—</td><td>Fall back to a chat-tab paste workflow (see below).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Detection + capability check</h3>
+    <p>Treat the surface as untrusted feature-detection: presence ≠ readiness.
+      The model file may still be downloading, or the user may have opted out of AI
+      features.</p>
+    <div class="code">async function getSession() {
+  if (typeof window.LanguageModel !== 'undefined') {
+    const avail = await LanguageModel.availability();
+    // 'readily' | 'available' | 'after-download' | 'no'
+    if (/(readily|available|download)/i.test(avail)) {
+      return await LanguageModel.create({
+        initialPrompts: [{ role: 'system',
+          content: 'You return strictly machine-readable JSON. No prose, no code fences.' }]
+      });
+    }
+  }
+  if (window.ai?.languageModel) {
+    return await window.ai.languageModel.create({
+      systemPrompt: 'You return strictly machine-readable JSON. …'
+    });
+  }
+  return null;   // caller falls back to chat-tab flow
+}</div>
+
+    <h3>What we ask the AI for</h3>
+    <p><strong>Don't send the whole catalogue.</strong> On-device models have
+      small context windows; a real publication has thousands of clips. Use
+      the AI as a <em>topic classifier</em>, not as the search engine — the
+      Blue Billywig search engine already knows everything.</p>
+    <p>The prompt gives the model two things and asks for one:</p>
+    <ol style="font-size:13px">
+      <li><strong>The article theme</strong>, in 1–2 sentences. Typed by the
+        editor, derived from a CMS field, or computed from page content.</li>
+      <li><strong>The list of buckets</strong> the site organises content into
+        — just names + a one-line description. Four buckets in this demo;
+        in a real deployment, maybe a dozen tags from your taxonomy.</li>
+      <li><strong>Strict output instructions</strong>: a single JSON object,
+        <code>{ topics: [...], reason: '...' }</code>, picking 1–3 of the
+        valid buckets, no prose, no code fences.</li>
+    </ol>
+    <div class="code">You are categorising an article so a video player can fetch relevant follow-up videos.
+
+The site has four content buckets:
+- recipes — food, cooking, quick meals
+- real estate — buying / renting / mortgages
+- parenting — kids, toddlers, family life
+- gaming — video games, gaming setups
+
+ARTICLE THEME / VISITOR CONTEXT:
+&lt;short free-text theme&gt;
+
+Pick 1–3 buckets that best fit the article (in order of relevance).
+Return ONLY a JSON object — no prose, no markdown fences:
+{"topics": ["bucket1", "bucket2"], "reason": "max 20 words"}
+
+Allowed bucket values: recipes, real estate, parenting, gaming.</div>
+
+    <h3>Parsing the answer defensively</h3>
+    <p>Even with strict instructions, small on-device models occasionally
+      wrap JSON in <code>```json … ```</code>, emit a trailing apology, or
+      invent a bucket name. The parser on the host side should be paranoid:</p>
+    <ol style="font-size:13px">
+      <li>Trim leading/trailing markdown fences.</li>
+      <li>Slice from the first <code>[</code> or <code>{</code>; ignore everything before it.</li>
+      <li><code>JSON.parse</code> in a <code>try</code>; if it's a bare array of strings, treat it as <code>{topics: ...}</code>.</li>
+      <li><strong>Whitelist-check every topic</strong> against the known bucket list. Drop anything else.</li>
+      <li>If nothing valid remains, surface the raw response in the UI rather than silently failing.</li>
+    </ol>
+
+    <h3>From AI topics to <code>setRelatedItems</code> — via the SAPI</h3>
+    <p>Once you have a clean list of bucket names, ask the SAPI for clips that
+      match. This is exactly the same search call the cliplist scenarios make,
+      with the topics OR-ed together and the CC-licensed gate AND-ed on:</p>
+    <div class="code">async function runSapiSearch(topics, limit = 6) {
+  const filterset = JSON.stringify([
+    { filters: topics.map((t, i) =&gt; ({
+        type: 'search', field: 'cat',
+        operator: 'containsAnyOf', value: t
+      })) },
+    { filters: [{ type: 'search', field: 'cat',
+                  operator: 'containsAnyOf', value: 'creative-commons' }] },
+  ]);
+  const params = new URLSearchParams({
+    filterset,
+    sort: 'published_date desc',
+    limit: String(limit),
+    fl:   'id,title,length_int,deeplink_string,cat',
+  });
+  const r = await fetch(`${PUBLICATION}/json/search?${params}`);
+  const d = await r.json();
+  return (d.items || []).map(it =&gt; ({
+    id: String(it.id), type: 'MediaClip',
+    title: it.title, deeplink: `${PUBLICATION}/view/${it.id}`,
+  }));
+}
+
+const items = await runSapiSearch(parsedAiResponse.topics);
+window.bluebillywig.players[0].setRelatedItems(items);</div>
+    <p>The two-step shape — <em>AI classifies</em>, <em>SAPI searches</em> —
+      means the AI never has to see your full catalogue, and you keep all the
+      production-ready bits of the search engine (relevance scoring, recency,
+      content-protection gates, randomisation, etc.). You can also bypass the
+      AI entirely on cache-hit (same theme → same topics → same SAPI URL).</p>
+
+    <h3>Fallback path for browsers without an on-device AI</h3>
+    <p>Roughly half of today's visitors don't have a usable
+      <code>window.LanguageModel</code>. The same prompt works in any
+      chat-style web AI; this demo wires up the two most common:</p>
+    <table>
+      <thead><tr><th>Agent</th><th>Deeplink shape</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Claude</strong> (Anthropic)</td>
+          <td><code>https://claude.ai/new?q=&lt;url-encoded-prompt&gt;</code></td>
+          <td>Opens a new chat with the prompt pre-filled. Long prompts work
+            most reliably by also copying to the clipboard before opening the
+            tab (so the visitor can paste with Cmd/Ctrl-V if the query string
+            gets truncated).</td>
+        </tr>
+        <tr>
+          <td><strong>ChatGPT</strong> (OpenAI)</td>
+          <td><code>https://chatgpt.com/?q=&lt;url-encoded-prompt&gt;</code></td>
+          <td>Same pattern. Same clipboard safety-net applies.</td>
+        </tr>
+        <tr>
+          <td>Gemini, Copilot, Mistral <em>le Chat</em>, …</td>
+          <td>(no public deeplink → use <em>Copy prompt</em>)</td>
+          <td>The prompt is plain text — every chat tool accepts it. The page
+            offers a one-click <em>Copy prompt</em> button as a generic
+            fallback.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>The host page only needs one piece of input back from the visitor: the
+      JSON answer pasted into a textarea. Same parser as the on-device path
+      processes both — so adding another chat agent is just another button.</p>
+    <p>The alternative integration is a <strong>backend proxy</strong>: the
+      host site forwards the prompt to a server-side AI with its own
+      credentials and returns parsed picks. Lower visitor friction, but
+      introduces server cost and a third-party data path.</p>
+
+    <h3>Privacy &amp; safety properties</h3>
+    <ul style="font-size:13px">
+      <li>With <code>LanguageModel</code> the prompt and the answer never leave
+        the visitor's device. The host page sees the picks; the BB SAPI sees
+        the resulting <code>setRelatedItems</code> call. No third party.</li>
+      <li>The prompt only contains catalogue metadata + the editor-supplied
+        theme — no visitor identifiers, no cookies, no localStorage.</li>
+      <li>Hallucinated ids are filtered out at the catalogue boundary, so the
+        worst the AI can do is return an empty list (handled like a normal
+        "nothing found" — the cliplist takes over again on the next clip).</li>
+    </ul>
+
+    <h2>6. Embed: JS snippet vs iframe</h2>
+    <p>All five scenarios on this site use the <strong>JS-embed snippet</strong>:</p>
+    <div class="code">&lt;div id="player-host"&gt;
+  &lt;script src="https://{publication}.bbvms.com/p/{playoutLabel}/c/{clipId}.js" async&gt;&lt;/script&gt;
+&lt;/div&gt;</div>
+    <p>This runs the player same-origin in the host page. Consequences relevant to
+      smart related items:</p>
+    <ul>
+      <li><strong>QueryString</strong> datasource reads the host page's address bar,
+        so the CMS can drive the filter just by tweaking the article URL.</li>
+      <li><strong>LocalStorage</strong> + <strong>JavaScript</strong> datasources can
+        be primed by the host (via <code>setLocalStorageItem</code>, page DOM, etc.).</li>
+      <li>The public API on <code>window.bluebillywig.players[i]</code> is callable
+        directly from the host — required for scenario ④.</li>
+    </ul>
+    <p>The alternative iframe embed
+      (<code>https://{publication}.bbvms.com/p/{playoutLabel}/c/{clipId}.html</code>)
+      isolates the player but breaks scenario ④ and complicates ② / ③ — the iframe
+      sees a different origin, so it has its own <code>localStorage</code> and its
+      own DOM.</p>
+
+    <h2>7. Public player API used in these demos</h2>
+    <table>
+      <thead><tr><th>Method</th><th>Where it appears</th></tr></thead>
+      <tbody>
+        <tr><td><code>player.setRelatedItems(items)</code></td><td>④ Direct list</td></tr>
+        <tr><td><code>player.setRelatedClips(items)</code></td><td>same — alias kept for backwards compatibility</td></tr>
+        <tr><td><code>player.getRelatedItems()</code></td><td>read what's currently in the panel</td></tr>
+        <tr><td><code>player.setLocalStorageItem(key, value)</code></td><td>② Visitor preference — write to the player's store</td></tr>
+        <tr><td><code>player.setLocalStorageItems({k:v, …})</code></td><td>batch write</td></tr>
+        <tr><td><code>player.getLocalStorageItem(key)</code></td><td>read from the player's store</td></tr>
+        <tr><td><code>player.seek(seconds)</code></td><td>Skip-to-end button</td></tr>
+        <tr><td><code>window.bluebillywig.onPlayerAdded = (player) =&gt; …</code></td><td>set <em>before</em> the player script loads — called once each player instance is ready</td></tr>
+        <tr><td><code>window.LanguageModel.availability()</code></td><td>scenario ⑤ — feature-detection for Chrome's on-device AI</td></tr>
+        <tr><td><code>window.LanguageModel.create({initialPrompts:[…]})</code></td><td>scenario ⑤ — open a session and feed it a system prompt</td></tr>
+        <tr><td><code>session.prompt(text)</code></td><td>scenario ⑤ — single-shot text completion, used to ask for the JSON pick list</td></tr>
+        <tr><td><code>?useSuggest=true</code> on the embed URL</td><td>scenario ⑥ — flips on the Suggests helper before player init (also settable via <code>useSuggest: 'true'</code> on the cliplist itself)</td></tr>
+        <tr><td><code>player.getClipData()</code></td><td>scenario ⑥ — after Suggests fires, returns the clip Suggests just chose</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="suggests">5c. Bonus: Suggests — the player's built-in classifier (scenario ⑥)</h2>
+    <div style="background:#eff5fb; border:1px solid #bcd2ea; border-radius:8px; padding:12px 16px; margin:14px 0; font-size:14px; color:#234;">
+      <strong>What Suggests really does.</strong> Every other section on this
+      page is about <em>which clips appear after the main clip ends</em>.
+      Suggests is the only mechanism on the player that changes the
+      <strong>main clip itself</strong>. The host embeds the player against
+      some bootstrap clip ID; if <code>useSuggest</code> is set, the player
+      throws that anchor away before <code>_objectInit</code> and replaces it
+      with whatever the Blue Billywig search engine ranked first against the
+      host page's metadata. The end-screen panel happens to be filled from
+      the rest of the same search, but that's a side-effect of how Suggests
+      writes <code>clipListData.items</code>, not the headline feature.
+    </div>
+    <p>Suggests is the Blue Billywig player's <em>own</em> answer to "pick the right
+      clip for this article" — shipped years before LLMs were on the page. It
+      runs in <code>src/helpers/Suggest.js</code> before the player even
+      initialises (<code>Player.js:70-82</code>): if the cliplist has
+      <code>useSuggest: true</code> <em>or</em> the embed script URL carries
+      <code>?useSuggest=true</code>, the helper scrapes the host page and
+      queries the Blue Billywig search engine (Apache Solr under the hood)
+      for the best matching MediaClip. The first result becomes the main clip
+      the player plays; the rest fill the end-screen.</p>
+
+    <h3>Signals Suggests reads from the host page</h3>
+    <table>
+      <thead><tr><th>Source</th><th>What's used</th></tr></thead>
+      <tbody>
+        <tr><td><code>&lt;meta name="keywords"&gt;</code></td><td>Each comma-separated keyword, AND-ed and OR-ed both ways.</td></tr>
+        <tr><td><code>&lt;meta name="og:title"&gt;</code> / <code>&lt;title&gt;</code></td><td>Phrase-matched (quoted) + filtered word list.</td></tr>
+        <tr><td><code>&lt;meta name="og:description"&gt;</code></td><td>Filtered word list (stop words stripped per language).</td></tr>
+        <tr><td><code>&lt;meta name="og:locale"&gt;</code> / <code>&lt;html lang&gt;</code></td><td>Picks the language's stop-word list.</td></tr>
+        <tr><td>JSON-LD <code>NewsArticle</code> / <code>BlogPosting</code> / <code>WebPage</code></td><td><code>headline</code>, <code>description</code>, <code>keywords</code>, <code>tag</code>, <code>inLanguage</code>.</td></tr>
+        <tr><td><code>location.pathname</code></td><td>Path segments tokenised as fallback keywords.</td></tr>
+        <tr><td>Cliplist <code>extraSuggestQuery</code> (OVP)</td><td>Optional escape hatch — a raw search-engine query fragment (Lucene/Solr syntax) or JS returning one, appended to the query, optionally weighted with <code>^N</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The query Suggests builds</h3>
+    <p>Each part is wrapped in <code>(…)^weight</code>, with the most relevant
+      parts getting the highest weight (descending). Parts are joined with
+      <code>OR</code>. A trailing <code>OR *:*^1</code> ensures the search
+      always returns <em>something</em> rather than empty. The cliplist's own
+      search query (its filters, flattened) becomes the <code>fq[]</code>, so
+      a narrow cliplist becomes a narrow Suggests source — useful for a
+      content-licence gate.</p>
+    <div class="code">GET {publication}/json/search
+    ?query=(keywords AND-joined)^N OR (keywords space-joined)^N-1
+           OR "&lt;exact og:title&gt;"^… OR &lt;filtered og:title words&gt;^…
+           OR &lt;filtered description words&gt;^…
+           OR &lt;tokenised URL path&gt;^…
+           OR *:*^1
+    &fq[]=typeSort:"MediaClip" AND (&lt;cliplist's Solr query&gt;)
+    &limit=10</div>
+
+    <h3>Per-visitor de-duplication</h3>
+    <p>Suggests keeps a list of clip IDs the visitor has already watched in
+      <code>localStorage.bb_player_viewed_clips</code> (filled from the
+      player's <code>started</code> event, Suggest.js:97-108). On the next
+      page load, the first result whose ID is not in that list wins —
+      falling back to the first result when every candidate has been seen.</p>
+
+    <h3>How to activate</h3>
+    <ul style="font-size:13px">
+      <li><strong>Cliplist-level</strong> (the production path): tick
+        <em>Use Suggests</em> on the playlist in the OVP. The OVP makes this
+        mutually exclusive with <em>Allow dynamic filters</em> in the same UI.</li>
+      <li><strong>Embed-level</strong> (good for demos): add
+        <code>?useSuggest=true</code> on the embed script URL. The cliplist
+        attached to the playout still bounds the search via its filter
+        query — make sure that filter is broad enough or the search will
+        return little.</li>
+    </ul>
+
+    <h3>Suggests vs the AI scenario</h3>
+    <p>Both pick a clip from page context. <strong>Suggests</strong> is a
+      weighted keyword search against the Blue Billywig search engine, runs
+      in every browser, and needs nothing on the page beyond what SEO already
+      adds. <strong>The AI scenario</strong> classifies first (article → topic
+      bucket) and then uses the cliplist or a SAPI search to look up clips by
+      that label — better when metadata is thin or generic, more dependent on
+      browser capability or on a chat-tab fallback. A real deployment can use
+      both: Suggests as the default, AI when Suggests' top hit has a weak
+      relevance score.</p>
+
+    <h2 id="companion">8. Companion demo — Smart Channels</h2>
+    <p>The same cliplists + clips power the smart-Channels walk-through at
+      <a href="https://www.bluebillywig.tv/smart-channels/">/smart-channels/</a>.
+      Pick the surface that fits your integration: <em>panel after each video</em>
+      (this demo) or <em>whole sub-page of videos</em> (Channels). The
+      cliplist contract is identical; the runtime that resolves it differs
+      (player vs. channel widget) — full data-source support matrix in the
+      Channels tech docs.</p>
+
+    <h2>9. Assets created on the <code>demo</code> publication for this walk-through</h2>
+    <table>
+      <thead><tr><th>Type</th><th>ID</th><th>Label / title</th><th>Used by</th></tr></thead>
+      <tbody>
+        <tr><td>Cliplist</td><td>1778581766079178</td><td>QueryString:topic (CC-pool gated) — also used by the smart-Channels demo</td><td>① and ④</td></tr>
+        <tr><td>Cliplist</td><td>1778581784328417</td><td>LocalStorage:bb_demo_topic (CC-pool gated) — also used by the smart-Channels demo</td><td>②</td></tr>
+        <tr><td>Cliplist</td><td>1778581805773422</td><td>JavaScript reads <code>meta[name=x-bb-topic]</code> (CC-pool gated)</td><td>③</td></tr>
+        <tr><td>Cliplist</td><td>1778589500646316</td><td><code>useSuggest: true</code> (CC-pool gated, no dynamic filters)</td><td>⑥</td></tr>
+        <tr><td>Playout</td><td>13550</td><td><code>smart_related_items_demo</code></td><td>wires cliplist 1778581766079178 in</td></tr>
+        <tr><td>Playout</td><td>13551</td><td><code>smart_related_demo_localstorage</code></td><td>wires cliplist 1778581784328417 in</td></tr>
+        <tr><td>Playout</td><td>13552</td><td><code>smart_related_demo_javascript</code></td><td>wires cliplist 1778581805773422 in</td></tr>
+        <tr><td>Playout</td><td>13556</td><td><code>smart_related_demo_suggests</code></td><td>wires cliplist 1778589500646316 in (also the Suggests fq source)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>10. Glossary</h2>
+    <table>
+      <thead><tr><th>Technical term</th><th>Used in this demo as</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td>QueryString datasource</td><td>① URL signal</td><td>A label tacked onto the page's web address.</td></tr>
+        <tr><td>LocalStorage datasource</td><td>② Visitor preference</td><td>A small note saved by the browser, kept across pages and visits.</td></tr>
+        <tr><td>JavaScript datasource</td><td>③ Page tag</td><td>A hidden tag in the article's HTML; the player runs a snippet that reads it.</td></tr>
+        <tr><td><code>setRelatedItems()</code></td><td>④ Direct list</td><td>The site hands the player a ready-made list of follow-ups.</td></tr>
+        <tr><td>Cliplist / smart playlist</td><td>—</td><td>A reusable list of videos. "Smart" means it queries the catalogue with filters.</td></tr>
+        <tr><td>Filter / filterset</td><td>—</td><td>A rule that picks which videos belong to the list.</td></tr>
+        <tr><td>Datasource</td><td>—</td><td>Where the filter gets its value from at run-time.</td></tr>
+        <tr><td>Exit-screen / end-screen</td><td>—</td><td>The panel that appears after a video ends.</td></tr>
+        <tr><td>Suggests</td><td>⑥ Suggests</td><td>The player's built-in "match this article to a clip" classifier. Scrapes SEO metadata; queries the Blue Billywig search engine; <strong>replaces the main clip the player was embedded with</strong>; uses the rest of the search results to pre-fill the end-screen.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<footer>
+  Blue Billywig · technical reference for the smart related items walk-through ·
+  <a href="../">back to demo</a>
+</footer>
+</body>
+</html>
